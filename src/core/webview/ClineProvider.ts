@@ -24,7 +24,7 @@ import { getNonce } from "./getNonce"
 import { getUri } from "./getUri"
 import { playSound, setSoundEnabled, setSoundVolume } from "../../utils/sound"
 import { enhancePrompt } from "../../utils/enhance-prompt"
-
+import { ProfileManager } from "../profiles/ProfileManager"
 /*
 https://github.com/microsoft/vscode-webview-ui-toolkit-samples/blob/main/default/weather-webview/src/providers/WeatherViewProvider.ts
 
@@ -41,6 +41,19 @@ type SecretKey =
 	| "geminiApiKey"
 	| "openAiNativeApiKey"
 	| "deepSeekApiKey"
+
+const SECRET_KEYS = [
+	"apiKey",
+	"openRouterApiKey",
+	"awsAccessKey",
+	"awsSecretKey",
+	"awsSessionToken",
+	"openAiApiKey",
+	"geminiApiKey",
+	"openAiNativeApiKey",
+	"deepSeekApiKey"
+] as const;
+
 type GlobalStateKey =
 	| "apiProvider"
 	| "apiModelId"
@@ -77,6 +90,42 @@ type GlobalStateKey =
 	| "preferredLanguage" // Language setting for Cline's communication
 	| "writeDelayMs"
 
+const GLOBAL_STATE_KEYS = [
+	"apiProvider",
+	"apiModelId",
+	"awsRegion",
+	"awsUseCrossRegionInference",
+	"vertexProjectId",
+	"vertexRegion",
+	"lastShownAnnouncementId",
+	"customInstructions",
+	"alwaysAllowReadOnly",
+	"alwaysAllowWrite",
+	"alwaysAllowExecute",
+	"alwaysAllowBrowser",
+	"taskHistory",
+	"openAiBaseUrl",
+	"openAiModelId",
+	"ollamaModelId",
+	"ollamaBaseUrl",
+	"lmStudioModelId",
+	"lmStudioBaseUrl",
+	"anthropicBaseUrl",
+	"azureApiVersion",
+	"openRouterModelId",
+	"openRouterModelInfo",
+	"openRouterUseMiddleOutTransform",
+	"allowedCommands",
+	"soundEnabled",
+	"soundVolume",
+	"diffEnabled",
+	"alwaysAllowMcp",
+	"browserViewportSize",
+	"screenshotQuality",
+	"fuzzyMatchThreshold",
+	"preferredLanguage",
+	"writeDelayMs"
+] as const;
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
 	uiMessages: "ui_messages.json",
@@ -93,12 +142,78 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	private cline?: Cline
 	private workspaceTracker?: WorkspaceTracker
 	mcpHub?: McpHub
+	private async initializeProfileManager() {
+		await this.profileManager.loadProfiles()
+		const activeProfile = this.profileManager.getActiveProfile()
+		if (activeProfile) {
+			// Load settings from active profile
+			for (const [key, value] of Object.entries(activeProfile.settings)) {
+				await this.context.globalState.update(key as GlobalStateKey, value)
+			}
+			// Load secrets
+			for (const [key, value] of Object.entries(activeProfile.secrets)) {
+				if (value) {
+					await this.context.secrets.store(key as SecretKey, value as string)
+				}
+			}
+		}
+	}
+
 	private latestAnnouncementId = "dec-10-2024" // update to some unique identifier when we add a new announcement
+	private profileManager: ProfileManager
+
+	async switchProfile(profileId: string) {
+		await this.profileManager.setActiveProfile(profileId)
+		const profile = this.profileManager.getActiveProfile()
+		if (profile) {
+			await this.initializeProfileManager()
+			// Notify webview of profile change
+			this.view?.webview.postMessage({
+				type: "profileChanged",
+				profile: profile
+			})
+		}
+	}
+
+	async getCurrentProfile() {
+		return this.profileManager.getActiveProfile()
+	}
+
+	async getAllProfiles() {
+		return this.profileManager.getAllProfiles()
+	}
+
+	async createNewProfile(id: string, name: string) {
+		await this.profileManager.createProfile(id, name)
+		// Get current settings to populate new profile
+		const settings: any = {}
+		const secrets: any = {}
+		
+		for (const key of GLOBAL_STATE_KEYS) {
+			const value = await this.context.globalState.get(key)
+			if (value !== undefined) {
+				settings[key] = value
+			}
+		}
+		
+		for (const key of SECRET_KEYS) {
+			const value = await this.context.secrets.get(key)
+			if (value) {
+				secrets[key] = value
+			}
+		}
+
+		await this.profileManager.updateProfile(id, { settings, secrets })
+	}
 
 	constructor(
 		readonly context: vscode.ExtensionContext,
 		private readonly outputChannel: vscode.OutputChannel,
 	) {
+		this.profileManager = new ProfileManager(context)
+		this.initializeProfileManager().catch(err => {
+			this.outputChannel.appendLine(`Failed to initialize profile manager: ${err}`)
+		})
 		this.outputChannel.appendLine("ClineProvider instantiated")
 		ClineProvider.activeInstances.add(this)
 		this.workspaceTracker = new WorkspaceTracker(this)
@@ -355,6 +470,32 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		webview.onDidReceiveMessage(
 			async (message: WebviewMessage) => {
 				switch (message.type) {
+					case "createProfile":
+						if (message.profileId && message.profileName) {
+							await this.createNewProfile(message.profileId, message.profileName)
+							await this.postStateToWebview()
+						}
+						break
+					case "switchProfile":
+						if (message.profileId) {
+							await this.switchProfile(message.profileId)
+							await this.postStateToWebview()
+						}
+						break
+					case "getAllProfiles":
+						const profiles = await this.getAllProfiles()
+						webview.postMessage({
+							type: "profiles",
+							profiles: profiles
+						})
+						break
+					case "getCurrentProfile":
+						const currentProfile = await this.getCurrentProfile()
+						webview.postMessage({
+							type: "currentProfile",
+							profile: currentProfile
+						})
+						break
 					case "webviewDidLaunch":
 						this.postStateToWebview()
 						this.workspaceTracker?.initializeFilePaths() // don't await

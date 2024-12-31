@@ -44,6 +44,13 @@ export interface ExtensionState {
 	clineMessages: ClineMessage[]
 	taskHistory: HistoryItem[]
 	shouldShowAnnouncement: boolean
+	profiles: Array<{
+		id: string
+		name: string
+		settings: any
+		secrets: any
+	}>
+	currentProfileId?: string
 	apiConfiguration?: ApiConfiguration
 	customInstructions?: string
 	alwaysAllowReadOnly?: boolean

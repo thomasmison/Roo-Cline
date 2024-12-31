@@ -48,6 +48,10 @@ export interface WebviewMessage {
 		| "enhancedPrompt"
 		| "draggedImages"
 		| "deleteMessage"
+		| "createProfile"
+		| "switchProfile"
+		| "getAllProfiles"
+		| "getCurrentProfile"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse
@@ -62,6 +66,8 @@ export interface WebviewMessage {
 	alwaysAllow?: boolean
 	dataUrls?: string[]
 	values?: Record<string, any>
+	profileId?: string
+	profileName?: string
 }
 
 export type ClineAskResponse = "yesButtonClicked" | "noButtonClicked" | "messageResponse"
