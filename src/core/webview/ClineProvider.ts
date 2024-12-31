@@ -1195,6 +1195,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 		return {
 			version: this.context.extension?.packageJSON?.version ?? "",
+			clineMessages: [],
+			taskHistory: [],
+			shouldShowAnnouncement: false,
 			apiConfiguration,
 			customInstructions,
 			alwaysAllowReadOnly: alwaysAllowReadOnly ?? false,
@@ -1213,9 +1216,11 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			allowedCommands,
 			soundVolume: soundVolume ?? 0.5,
 			browserViewportSize: browserViewportSize ?? "900x600",
-			screenshotQuality: screenshotQuality ?? 75,
-			preferredLanguage: preferredLanguage ?? 'English',
-			writeDelayMs: writeDelayMs ?? 1000,
+			screenshotQuality: screenshotQuality ?? 80,
+			writeDelayMs: writeDelayMs ?? 100,
+			preferredLanguage: (await this.getGlobalState("preferredLanguage")) ?? "English",
+			profiles: (await this.getAllProfiles()) ?? [],
+			currentProfileId: (await this.getCurrentProfile())?.id
 		}
 	}
 
@@ -1271,6 +1276,12 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 	*/
 
 	async getState() {
+		// Get profile information first
+		const profileList = await this.getAllProfiles();
+		const currentActiveProfile = await this.getCurrentProfile();
+		const languagePref = await this.getGlobalState("preferredLanguage");
+
+		// Get all other state
 		const [
 			storedApiProvider,
 			apiModelId,

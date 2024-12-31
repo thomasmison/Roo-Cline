@@ -4,6 +4,7 @@ import { useExtensionState } from "../../context/ExtensionStateContext"
 import { validateApiConfiguration, validateModelId } from "../../utils/validate"
 import { vscode } from "../../utils/vscode"
 import ApiOptions from "./ApiOptions"
+import ProfileSelector from "./ProfileSelector"
 
 const IS_DEV = false // FIXME: use flags when packaging
 
@@ -134,6 +135,9 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 
 				<h3 style={{ color: "var(--vscode-foreground)", margin: 0 }}>Provider Settings</h3>
 				<VSCodeButton onClick={handleSubmit}>Done</VSCodeButton>
+			</div>
+			<div style={{ marginBottom: 15 }}>
+				<ProfileSelector />
 			</div>
 			<div
 				style={{ flexGrow: 1, overflowY: "scroll", paddingRight: 8, display: "flex", flexDirection: "column" }}>
